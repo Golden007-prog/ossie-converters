@@ -99,6 +99,32 @@ def test_quoted_declared_field_name_is_sanitized_in_metric_reference():
     assert parse(files["views/orders.view.yaml"])["measures"]["total"]["sql"] == "${net_amount}"
 
 
+@pytest.mark.parametrize("declared_name,reference", [
+    ("net_amount", "NET_AMOUNT"),
+    ("Net_Amount", "nEt_AmOuNt"),
+])
+def test_unquoted_declared_field_reference_is_case_insensitive(declared_name, reference):
+    ds = dataset("orders", [metric("total", "SUM(" + reference + ")")])
+    ds["fields"][0]["name"] = declared_name
+    files = export(ds)
+    assert parse(files["views/orders.view.yaml"])["measures"]["total"] == \
+        {"sql": "${" + declared_name + "}", "aggregate_type": "sum"}
+
+
+def test_unquoted_discarded_declared_field_cannot_become_a_raw_column():
+    ds = dataset("orders", [metric("total", "SUM(NET_AMOUNT)")])
+    ds["fields"][0]["expression"]["dialects"][0]["dialect"] = "MDX"
+    with pytest.warns(UserWarning, match="dropping field"):
+        with pytest.raises(ConversionError, match="NET_AMOUNT.*no usable expression"):
+            export(ds)
+
+
+def test_quoted_field_reference_keeps_case_sensitive_identity():
+    ds = dataset("orders", [metric("total", 'SUM("NET_AMOUNT")')])
+    files = export(ds)
+    assert parse(files["views/orders.view.yaml"])["measures"]["total"]["sql"] == '"NET_AMOUNT"'
+
+
 def test_function_name_and_scientific_notation_are_not_field_references():
     ds = dataset("orders", [metric("total", "sum /* sum */ (sum * 1e3)")])
     ds["fields"][0]["name"] = "sum"

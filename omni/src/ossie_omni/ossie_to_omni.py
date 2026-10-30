@@ -552,6 +552,8 @@ def _dataset_metric_expression(expr, dims, scope):
         re.DOTALL)
     keywords = {"ALL", "AND", "AS", "BETWEEN", "CASE", "DISTINCT", "ELSE", "END",
                 "FALSE", "IN", "IS", "LIKE", "NOT", "NULL", "OR", "THEN", "TRUE", "WHEN"}
+    unquoted_fields = {name.lower(): dim for name, dim in dims["fields"].items()}
+    unquoted_declared = {name.lower() for name in dims["declared"]}
 
     def replace(match):
         name = match.group("name")
@@ -571,9 +573,12 @@ def _dataset_metric_expression(expr, dims, scope):
             name = name[1:-1].replace('""', '"')
         elif name.upper() in keywords:
             return name
-        if name in dims["fields"]:
-            return "${" + dims["fields"][name] + "}"
-        if name in dims["declared"]:
+        key = name if quoted else name.lower()
+        fields = dims["fields"] if quoted else unquoted_fields
+        declared = dims["declared"] if quoted else unquoted_declared
+        if key in fields:
+            return "${" + fields[key] + "}"
+        if key in declared:
             raise ConversionError(f"{scope}: field '{name}' has no usable expression")
         return match.group(0)
 
